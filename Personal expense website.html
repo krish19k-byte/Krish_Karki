@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Personal Transaction Tracker</title>
+  
+  <!-- Sajan Maharjan Nepali Datepicker CSS (v5.0.6) -->
+  <link href="https://nepalidatepicker.sajanmaharjan.com.np/v5/nepali.datepicker/css/nepali.datepicker.v5.0.6.min.css" rel="stylesheet" type="text/css"/>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f4f4f9;
+      padding: 20px;
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+    .container {
+      max-width: 700px;
+      margin: auto;
+      background: #fff;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    input, select, button {
+      padding: 10px;
+      margin: 5px 0;
+      width: 100%;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      box-sizing: border-box; /* Align all inputs consistently */
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    table, th, td {
+      border: 1px solid #ccc;
+    }
+    th, td {
+      padding: 10px;
+      text-align: center;
+    }
+    .income {
+      color: green;
+    }
+    .expense {
+      color: red;
+    }
+    .summary {
+      margin-top: 20px;
+      padding: 10px;
+      background: #f0f0f0;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>💰 Personal Transaction Tracker</h1>
+  <div class="container">
+    <h3>Add Transaction</h3>
+    <input type="number" id="amount" placeholder="Amount" />
+    <select id="type">
+      <option value="cash_income">Cash Income</option>
+      <option value="cash_expense">Cash Expense</option>
+      <option value="online_income">Online Income</option>
+      <option value="online_expense">Online Expense</option>
+    </select>
+    <input type="text" id="category" placeholder="Category (e.g., Food, Rent)" />
+    
+    <!-- Changed type to text so the custom Nepali Datepicker can overlay on click -->
+    <input type="text" id="date" placeholder="Select Nepali Date (B.S.)" />
+    
+    <button onclick="addTransaction()">Add Transaction</button>
+
+    <div class="summary">
+      <p>Cash Income: <span id="cashIncome">0</span></p>
+      <p>Cash Expense: <span id="cashExpense">0</span></p>
+      <p>Online Income: <span id="onlineIncome">0</span></p>
+      <p>Online Expense: <span id="onlineExpense">0</span></p>
+      <p>Total Balance: <span id="balance">0</span></p>
+    </div>
+
+    <h3>Transactions</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Date (B.S.)</th>
+          <th>Category</th>
+          <th>Type</th>
+          <th>Amount</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="transactionTable">
+        <!-- Transactions will appear here -->
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Custom Sleek Alert Modal to replace standard browser alert() -->
+  <div id="customAlert" style="display: none; position: fixed; z-index: 10000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.4); justify-content: center; align-items: center;">
+    <div style="background-color: white; padding: 20px; border-radius: 8px; max-width: 320px; width: 90%; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.2); font-family: Arial, sans-serif;">
+      <p id="alertText" style="margin-bottom: 20px; color: #333; font-weight: bold; font-size: 15px;"></p>
+      <button onclick="closeCustomAlert()" style="background-color: #2196F3; color: white; border: none; padding: 8px 25px; border-radius: 5px; cursor: pointer; font-size: 14px; width: auto;">OK</button>
+    </div>
+  </div>
+
+  <!-- Sajan Maharjan Nepali Datepicker JS -->
+  <script src="https://nepalidatepicker.sajanmaharjan.com.np/v5/nepali.datepicker/js/nepali.datepicker.v5.0.6.min.js" type="text/javascript"></script>
+
+  <script>
+    let transactions = JSON.parse(localStorage.getItem('transactions')) || [];
+
+    // Safe B.S. Date retrieval helpers supporting modern library structures
+    function getSafeCurrentBsDate() {
+        if (typeof NepaliFunctions !== "undefined") {
+            if (NepaliFunctions.BS && typeof NepaliFunctions.BS.GetCurrentDate === "function") {
+                return NepaliFunctions.BS.GetCurrentDate();
+            } else if (typeof NepaliFunctions.GetCurrentBsDate === "function") {
+                return NepaliFunctions.GetCurrentBsDate();
+            }
+        }
+        return null;
+    }
+
+    // Convert B.S. date object to standard formatted template string (YYYY-MM-DD)
+    function getSafeFormattedBsDate(bsDateObj) {
+        if (!bsDateObj) return "";
+        const year = bsDateObj.year;
+        const month = String(bsDateObj.month).padStart(2, '0');
+        const day = String(bsDateObj.day).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
+    // Modal helpers
+    function showCustomAlert(msg) {
+        document.getElementById('alertText').innerText = msg;
+        document.getElementById('customAlert').style.display = 'flex';
+    }
+
+    function closeCustomAlert() {
+        document.getElementById('customAlert').style.display = 'none';
+    }
+
+    // Initialize interactive Nepali Datepicker & set current default date
+    window.onload = function() {
+        const dateInput = document.getElementById("date");
+        const config = {
+            ndpYear: true,
+            ndpMonth: true,
+            readOnlyInput: true
+        };
+
+        if (typeof dateInput.NepaliDatePicker === "function") {
+            dateInput.NepaliDatePicker(config);
+        } else if (typeof dateInput.nepaliDatePicker === "function") {
+            dateInput.nepaliDatePicker(config);
+        }
+
+        const today = getSafeCurrentBsDate();
+        if (today) {
+            dateInput.value = getSafeFormattedBsDate(today);
+        }
+    };
+
+    function addTransaction() {
+      const amount = parseFloat(document.getElementById('amount').value);
+      const type = document.getElementById('type').value;
+      const category = document.getElementById('category').value.trim();
+      const dateInput = document.getElementById('date').value;
+
+      // Fallback to today's date if cleared
+      let date = dateInput;
+      if (!date) {
+          const today = getSafeCurrentBsDate();
+          if (today) {
+              date = getSafeFormattedBsDate(today);
+          } else {
+              date = new Date().toISOString().split('T')[0];
+          }
+      }
+
+      if (!amount || amount <= 0 || !category) {
+        showCustomAlert('Please enter valid amount and category!');
+        return;
+      }
+
+      const transaction = { amount, type, category, date };
+      transactions.push(transaction);
+      localStorage.setItem('transactions', JSON.stringify(transactions));
+
+      document.getElementById('amount').value = '';
+      document.getElementById('category').value = '';
+      
+      // Reset to current B.S. date
+      const today = getSafeCurrentBsDate();
+      if (today) {
+          document.getElementById('date').value = getSafeFormattedBsDate(today);
+      } else {
+          document.getElementById('date').value = '';
+      }
+
+      displayTransactions();
+    }
+
+    function deleteTransaction(index) {
+      transactions.splice(index, 1);
+      localStorage.setItem('transactions', JSON.stringify(transactions));
+      displayTransactions();
+    }
+
+    function displayTransactions() {
+      const table = document.getElementById('transactionTable');
+      table.innerHTML = '';
+
+      let cashIncome = 0;
+      let cashExpense = 0;
+      let onlineIncome = 0;
+      let onlineExpense = 0;
+
+      transactions.forEach((t, index) => {
+        if (t.type === 'cash_income') cashIncome += t.amount;
+        else if (t.type === 'cash_expense') cashExpense += t.amount;
+        else if (t.type === 'online_income') onlineIncome += t.amount;
+        else if (t.type === 'online_expense') onlineExpense += t.amount;
+
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${t.date}</td>
+          <td>${t.category}</td>
+          <td class="${t.type.includes('income') ? 'income' : 'expense'}">
+            ${t.type.replace('_', ' ')}
+          </td>
+          <td>${t.amount.toFixed(2)}</td>
+          <td><button class="delete-btn" style="background: red; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer;" onclick="deleteTransaction(${index})">Delete</button></td>
+        `;
+        table.appendChild(row);
+      });
+
+      document.getElementById('cashIncome').innerText = cashIncome.toFixed(2);
+      document.getElementById('cashExpense').innerText = cashExpense.toFixed(2);
+      document.getElementById('onlineIncome').innerText = onlineIncome.toFixed(2);
+      document.getElementById('onlineExpense').innerText = onlineExpense.toFixed(2);
+      document.getElementById('balance').innerText = ((cashIncome + onlineIncome) - (cashExpense + onlineExpense)).toFixed(2);
+    }
+
+    displayTransactions();
+  </script>
+
+</body>
+</html>
